@@ -27,16 +27,16 @@ struct MissileData
 	Vector Pos;
 	Vector Heading;
 	double RollRate, Vm, SafeDist, ExplodeDist, LockAngle, MaxTime;
-	int Origin;	//Ë­ÉäµÄ 
+	int Origin;	//è°å°„çš„ 
 };
 
-struct DroneData	//´¢´æÒ»¼ÜÎŞÈË»úµÄËùÓĞ²ÎÊı 
+struct DroneData	//å‚¨å­˜ä¸€æ¶æ— äººæœºçš„æ‰€æœ‰å‚æ•° 
 {
 	Vector Pos;
 	Vector Heading, Lift;
 	double PitchUpRate, PitchDownRate, RollRate, Vm, LateralScanRange, VerticalScanRange;
 	MissileData Missile;
-	int Squad, MissileFlying;	//Squad 0»ò1; MissileFlyingÅĞ¶ÏÊÇ·ñÓĞ·¢ÉäµÄµ¼µ¯ 
+	int Squad, MissileFlying;	//Squad 0æˆ–1; MissileFlyingåˆ¤æ–­æ˜¯å¦æœ‰å‘å°„çš„å¯¼å¼¹ 
 	int Target, Alive;
 }Drone[1005];
 
@@ -45,6 +45,20 @@ vector<int> ActiveDroneID;
 vector<int> ActiveMissile;
 
 int n,T;
+
+void CobraManeuver(int CurID)
+{
+	Vector TempHeading;
+	Vector TempLift;
+	TempHeading = Drone[CurID].Heading;
+	TempLift = Drone[CurID].Lift;
+	Drone[CurID].Heading = TempLift;
+	TempHeading.x *= -1;
+	TempHeading.y *= -1;
+	TempHeading.z *= -1;
+	Drone[CurID].Lift = TempHeading;
+	return; 
+}
 
 bool IsInSight(DroneData a,DroneData b)
 {
@@ -77,22 +91,22 @@ double GetPosLen(Vector a, Vector b)
 	return sqrt(Diffx*Diffx+Diffy*Diffy+Diffz*Diffz); 
 } 
 
-void DroneSelTarget()
+void DroneSelTarget()	//æ— äººæœºé”å®šç›®æ ‡ å¯¹åº”æ­¥éª¤1å‰åŠéƒ¨åˆ† 
 {
 	int ActiveDroneNum = ActiveDroneID.size();
 	for(int i=0;i<ActiveDroneNum;i++)
 	{
 		int CurID = ActiveDroneID[i];
-		//ÏÈÅĞ¶ÏÉÏÒ»´ÎµÄÎŞÈË»úÊÇ²»ÊÇ»¹ÄÜËø¶¨×¡
+		//å…ˆåˆ¤æ–­ä¸Šä¸€æ¬¡çš„æ— äººæœºæ˜¯ä¸æ˜¯è¿˜èƒ½é”å®šä½
 		int LastTarget = Drone[CurID].Target;
 		if(LastTarget && Drone[LastTarget].Alive && Drone[CurID].Heading * (Drone[CurID].Pos - Drone[LastTarget].Pos) > 0)
 			continue;
 		
 		Drone[CurID].Target = 0;
 		
-		for(int j=0;j<ActiveDroneNum;j++)	//ÏÈ¿´À×´ïÉ¨µÄ 
+		for(int j=0;j<ActiveDroneNum;j++)	//å…ˆçœ‹é›·è¾¾æ‰«çš„ 
 		{
-			//ÅĞ¶ÏÊÇ²»ÊÇ¶ÔÃæµÄ
+			//åˆ¤æ–­æ˜¯ä¸æ˜¯å¯¹é¢çš„
 			int TgtID = ActiveDroneID[j];
 			if(Drone[CurID].Squad == Drone[TgtID].Squad)
 				continue; 
@@ -103,6 +117,24 @@ void DroneSelTarget()
 		if(Drone[CurID].Target == 0)
 		{
 			
+		}
+	}
+	return;
+}
+
+void DroneSelDest()		//æ— äººæœºé€‰å®šé£è¡Œç­–ç•¥ å¯¹åº”æ­¥éª¤1ååŠéƒ¨åˆ† 
+{
+	int ActiveDroneNum = ActiveDroneID.size();
+	for(int i=0;i<ActiveDroneNum;i++)
+	{
+		int CurID = ActiveDroneID[i];
+		if(Drone[CurID].Target)
+		{
+			
+		}
+		else	//è‹¥æ²¡æœ‰ç›®æ ‡ 
+		{
+			CobraManeuver(CurID);
 		}
 	}
 	return;
@@ -134,10 +166,13 @@ int main()
 		ActiveDroneID.push_back(i+n);
 	}
 	
-	//ÏÂÃæ¿ªÊ¼Ä£Äâ
+	//ä¸‹é¢å¼€å§‹æ¨¡æ‹Ÿ
 	for(int i=1;i<=T;i++)
 	{
 		DroneSelTarget();
+		DroneSelDest();
+		DroneFireMissile();
+		MissileCalc();
 	} 
 	return 0;
 }
