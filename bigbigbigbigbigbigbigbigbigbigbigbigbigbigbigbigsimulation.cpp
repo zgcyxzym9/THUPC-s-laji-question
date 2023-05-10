@@ -22,6 +22,15 @@ int operator * (const Vector &a, const Vector &b)
 	return a.x*b.x+a.y*b.y+a.z*b.z;
 }
 
+Vector operator ^ (const Vector &a, const Vector &b)
+{
+	Vector ans;
+	ans.x = a.y * b.z - a.z * b.y;
+	ans.y = a.z * b.x - a.x * b.z;
+	ans.z = a.x * b.y - a.y * b.x;
+	return ans;
+}
+
 struct MissileData
 {
 	Vector Pos;
@@ -46,32 +55,6 @@ vector<int> ActiveMissile;
 
 int n,T;
 
-void CobraManeuver(int CurID)
-{
-	Vector TempHeading;
-	Vector TempLift;
-	TempHeading = Drone[CurID].Heading;
-	TempLift = Drone[CurID].Lift;
-	Drone[CurID].Heading = TempLift;
-	TempHeading.x *= -1;
-	TempHeading.y *= -1;
-	TempHeading.z *= -1;
-	Drone[CurID].Lift = TempHeading;
-	return; 
-}
-
-bool IsInSight(DroneData a,DroneData b)
-{
-	if(a.Heading * (b.Pos - a.Pos) > 0)
-		return true;
-	return false;
-}
-
-//bool IsSearchable(DroneData a, DroneData b)
-//{
-//	if(IsInSight(a,b) && )
-//}
-
 double GetVectorLen(Vector a)
 {
 	return sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
@@ -91,6 +74,63 @@ double GetPosLen(Vector a, Vector b)
 	return sqrt(Diffx*Diffx+Diffy*Diffy+Diffz*Diffz); 
 } 
 
+void CobraManeuver(int CurID)
+{
+	Vector TempHeading;
+	Vector TempLift;
+	TempHeading = Drone[CurID].Heading;
+	TempLift = Drone[CurID].Lift;
+	Drone[CurID].Heading = TempLift;
+	TempHeading.x *= -1;
+	TempHeading.y *= -1;
+	TempHeading.z *= -1;
+	Drone[CurID].Lift = TempHeading;
+	return; 
+}
+
+bool IsInSight(DroneData a, DroneData b)		//判断是否可以看见
+{
+	if(a.Heading * (b.Pos - a.Pos) > 0)
+		return true;
+	return false;
+}
+
+bool IsSearchable(DroneData a, DroneData b)
+{
+	if(!IsInSight(a, b))
+		return false;
+	
+	Vector DronePos, TargetPos, Heading, Lift, Left;
+	DronePos = a.Pos;
+	TargetPos = b.Pos;
+	Heading = a.Heading;
+	Lift = a.Lift;
+	Left = Heading ^ Lift;
+	if(Heading.z == 0)
+	{
+		swap(Heading.x, Heading.z);
+		swap(Lift.x, Lift.z);
+		swap(Left.x, Left.z);
+		if(Heading.z == 0)
+		{
+			swap(Heading.y, Heading.z);
+			swap(Lift.y, Lift.z);
+			swap(Left.y, Left.z);
+		}
+	}
+	if(Heading.z * (Lift.x - Lift.z / Heading.z) == 0)
+	{
+		swap(Heading.x, Heading.y);
+		swap(Lift.x, Lift.y);
+		swap(Left.x, Left.y);
+	}
+
+	double DiffX, DiffY;
+
+	DiffX = (TargetPos.y - DronePos.y - (Lift.y * (TargetPos.x - DronePos.x - Heading.x * (TargetPos.z - DronePos.z) / Heading.z) / (Lift.x - Lift.z / Heading.z)) - Heading.y * (TargetPos.z - DronePos.z) / Heading.z + (Heading.y * Lift.z * (TargetPos.x - DronePos.x - Heading.x * (TargetPos.z - DronePos.z) / Heading.z) / (Lift.x - Lift.z / Heading.z))) / (Left.y - (Lift.y * (Left.x - Left.z / Heading.z) / (Lift.x - Lift.z / Heading.z)) - Heading.y * Left.z / Heading.z + (Heading.y * Lift.z * (Left.x - Left.z / Heading.z))/(Heading.z * (Lift.x - Lift.z / Heading.z)));
+
+}
+
 void DroneSelTarget()	//无人机锁定目标 对应步骤1前半部分 
 {
 	int ActiveDroneNum = ActiveDroneID.size();
@@ -103,15 +143,16 @@ void DroneSelTarget()	//无人机锁定目标 对应步骤1前半部分
 			continue;
 		
 		Drone[CurID].Target = 0;
-		
+
 		for(int j=0;j<ActiveDroneNum;j++)	//先看雷达扫的 
 		{
 			//判断是不是对面的
 			int TgtID = ActiveDroneID[j];
 			if(Drone[CurID].Squad == Drone[TgtID].Squad)
-				continue; 
+				continue;
 			
-			
+			//然后判断雷达能不能扫到
+			if(IsSearchable(Drone[CurID], Drone[j]))
 		}
 		
 		if(Drone[CurID].Target == 0)
