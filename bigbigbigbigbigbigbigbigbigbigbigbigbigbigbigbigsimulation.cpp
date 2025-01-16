@@ -31,6 +31,15 @@ double operator*(const Vector a, const Vector b)
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+Vector operator*(const double a, const Vector b)
+{
+    Vector ans;
+    ans.x = a * b.x;
+    ans.y = a * b.y;
+    ans.z = a * b.z;
+    return ans;
+}
+
 class Missile
 {
 public:
