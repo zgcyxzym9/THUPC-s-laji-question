@@ -145,9 +145,9 @@ bool Drone::IsInSight(Drone target)
 bool Drone::IsInScan(Drone target)
 {
     Vector relative_position = target.GetPos() - pos_;
-    Vector r, l;
+    Vector l;
     l = OuterProduct(lift_, direction_);
-    if(Norm(ProjectionToVector(relative_position, l)) <= lateral_scan_range_ && Norm(ProjectionToVector(relative_position, lift_) <= vertical_scan_range_))
+    if(Norm(ProjectionToVector(relative_position, l)) <= lateral_scan_range_ && Norm(ProjectionToVector(relative_position, lift_)) <= vertical_scan_range_)
         return true;
     return false;
     
