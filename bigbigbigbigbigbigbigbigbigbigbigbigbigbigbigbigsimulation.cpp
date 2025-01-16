@@ -1,4 +1,5 @@
 #include <iostream>
+#include <vector>
 
 struct Vector
 {
@@ -7,35 +8,87 @@ struct Vector
     double z;
 };
 
-class Drone
+class Missile
 {
 public:
-    Drone(int id, int faction, Vector pos_, Vector direction_, Vector lift_,
-          double pull_rate_, double push_rate_, double roll_rate_, double max_speed_, double lateral_scan_range_, double vertical_scan_range_)
+    Missile(int id, int faction, double yaw_rate, double max_speed, double safe_dist, double explode_dist, double max_lock_angle, double nav_time)
     {
-        is_alive_ = true;
+        target_ = 0;
+        is_launched_ = false;
+        is_active_ = false;
+        yaw_rate_ = yaw_rate;
+        id_ = id;
+        faction_ = faction;
+        max_speed_ = max_speed;
+        safe_dist_ = safe_dist;
+        explode_dist_ = explode_dist;
+        max_lock_angle_ = max_lock_angle;
+        nav_time_ = nav_time;
     }
+
+    Missile();
 
 private:
     int id_;
     int faction_;
+    int target_;
+    Vector pos_;
+    Vector direction_;
+    double yaw_rate_, max_speed_, safe_dist_, explode_dist_, max_lock_angle_, nav_time_;
+    bool is_launched_;
+    bool is_active_;
+};
+
+class Drone
+{
+public:
+    Drone(int id, int faction, Vector pos, Vector direction, Vector lift,
+          double pull_rate, double push_rate, double roll_rate, double max_speed, double lateral_scan_range, double vertical_scan_range, 
+          double myr, double mms, double msd, double med, double mmla, double mnt) : missile_(id, faction, myr, mms, msd, med, mmla, mnt)
+    {
+        is_alive_ = true;
+        target_ = 0;
+        id_ = id;
+        faction_ = faction;
+        pos_ = pos;
+        direction_ = direction;
+        lift_ = lift;
+        pull_rate_ = pull_rate;
+        push_rate_ = push_rate;
+        roll_rate_ = roll_rate;
+        max_speed_ = max_speed;
+        lateral_scan_range_ = lateral_scan_range;
+        vertical_scan_range_ = vertical_scan_range;
+    }
+    Drone();
+
+private:
+    int id_;
+    int faction_;
+    int target_;
     Vector pos_;
     Vector direction_;
     Vector lift_;
     double pull_rate_, push_rate_, roll_rate_, max_speed_, lateral_scan_range_, vertical_scan_range_;
     bool is_alive_;
-};
-
-class Missile
-{
-public:
-private:
+    Missile missile_;
 };
 
 int main()
 {
     int n, T;
     std::cin >> n >> T;
+    std::vector<Drone> DroneList;
+
+    for (int i = 1; i <= 2 * n; i++)
+    {
+        Vector pos, dir, lift;
+        double pullr, pushr, rr, ms, lsr, vsr;
+        std::cin >> pos.x >> pos.y >> pos.z >> dir.x >> dir.y >> dir.z >> lift.x >> lift.y >> lift.z >> pullr >> pushr >> rr >> ms >> lsr >> vsr;
+        double myr, mms, msd, med, mmla, mnt;
+        std::cin>>myr>>mms>>msd>>med>>mmla>>mnt;
+        DroneList.push_back(Drone(i, int((i - 1) / n), pos, dir, lift, pullr, pushr, rr, ms, lsr, vsr, myr, mms, msd, med, mmla, mnt));
+    }
 
     return 0;
-}
+} 
