@@ -28,7 +28,7 @@ Vector operator-(const Vector a, const Vector b)
 
 double operator*(const Vector a, const Vector b)
 {
-    return a.x*b.x + a.y*b.y + a.z*b.z;
+    return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 class Missile
@@ -83,6 +83,9 @@ public:
         vertical_scan_range_ = vertical_scan_range;
     }
     Drone();
+    Vector GetPos();
+    bool IsInSight(Drone target);
+    bool IsInScan(Drone target);
     void LockTarget(std::vector<Drone> &DroneList); // 选定目标
 
 private:
@@ -97,6 +100,22 @@ private:
     Missile missile_;
 };
 
+Vector Drone::GetPos()
+{
+    return pos_;
+}
+
+bool Drone::IsInSight(Drone target)
+{
+    Vector target_pos = target.GetPos();
+    return direction_ * (target_pos - pos_) > 0;
+}
+
+bool Drone::IsInScan(Drone target)
+{
+    
+}
+
 void Drone::LockTarget(std::vector<Drone> &DroneList) // 选定目标
 {
     /*
@@ -104,9 +123,30 @@ void Drone::LockTarget(std::vector<Drone> &DroneList) // 选定目标
     否则若上一时刻的目标仍位于视野内，则仍选定该目标
     否则若有敌机在雷达扫描范围内，则选取距离最近的，距离相同取编号最小
     否则选取取 min{|rx − Lx|, |rx + Lx|} + min{|ry − Hy|, |ry + Hy|} 最小的，相同则取编号最小
+
+    在实现时我们把第二步检验放至第一步之前，以减少运算次数
     */
 
+    if (IsInSight(DroneList[target_ - 1]))
+        return;
+
     int drone_num = DroneList.size();
+    bool flag = true;
+    for (int i = 0; i < drone_num; i++)
+    {
+        if (IsInSight(DroneList[i]))
+        {
+            flag = false;
+            break;
+        }
+    }
+    if (flag)
+    {
+        target_ = 0;
+        return;
+    }
+
+
 }
 
 int main()
