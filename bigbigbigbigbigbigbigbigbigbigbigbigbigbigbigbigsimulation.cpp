@@ -8,6 +8,24 @@ struct Vector
     double z;
 };
 
+Vector operator+(const Vector a, const Vector b)
+{
+    Vector ans;
+    ans.x = a.x + b.x;
+    ans.y = a.y + b.y;
+    ans.z = a.z + b.z;
+    return ans;
+}
+
+Vector operator-(const Vector a, const Vector b)
+{
+    Vector ans;
+    ans.x = a.x - b.x;
+    ans.y = a.y - b.y;
+    ans.z = a.z - b.z;
+    return ans;
+}
+
 class Missile
 {
 public:
@@ -25,7 +43,6 @@ public:
         max_lock_angle_ = max_lock_angle;
         nav_time_ = nav_time;
     }
-
     Missile();
 
 private:
@@ -43,7 +60,7 @@ class Drone
 {
 public:
     Drone(int id, int faction, Vector pos, Vector direction, Vector lift,
-          double pull_rate, double push_rate, double roll_rate, double max_speed, double lateral_scan_range, double vertical_scan_range, 
+          double pull_rate, double push_rate, double roll_rate, double max_speed, double lateral_scan_range, double vertical_scan_range,
           double myr, double mms, double msd, double med, double mmla, double mnt) : missile_(id, faction, myr, mms, msd, med, mmla, mnt)
     {
         is_alive_ = true;
@@ -61,6 +78,7 @@ public:
         vertical_scan_range_ = vertical_scan_range;
     }
     Drone();
+    void LockTarget(std::vector<Drone> &DroneList); // 选定目标
 
 private:
     int id_;
@@ -74,6 +92,18 @@ private:
     Missile missile_;
 };
 
+void Drone::LockTarget(std::vector<Drone> &DroneList) // 选定目标
+{
+    /*
+    若视野内无敌方阵营无人机，则无选定目标
+    否则若上一时刻的目标仍位于视野内，则仍选定该目标
+    否则若有敌机在雷达扫描范围内，则选取距离最近的，距离相同取编号最小
+    否则选取取 min{|rx − Lx|, |rx + Lx|} + min{|ry − Hy|, |ry + Hy|} 最小的，相同则取编号最小
+    */
+
+    int drone_num = DroneList.size();
+}
+
 int main()
 {
     int n, T;
@@ -86,9 +116,9 @@ int main()
         double pullr, pushr, rr, ms, lsr, vsr;
         std::cin >> pos.x >> pos.y >> pos.z >> dir.x >> dir.y >> dir.z >> lift.x >> lift.y >> lift.z >> pullr >> pushr >> rr >> ms >> lsr >> vsr;
         double myr, mms, msd, med, mmla, mnt;
-        std::cin>>myr>>mms>>msd>>med>>mmla>>mnt;
+        std::cin >> myr >> mms >> msd >> med >> mmla >> mnt;
         DroneList.push_back(Drone(i, int((i - 1) / n), pos, dir, lift, pullr, pushr, rr, ms, lsr, vsr, myr, mms, msd, med, mmla, mnt));
     }
 
     return 0;
-} 
+}
