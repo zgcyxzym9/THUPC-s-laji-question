@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <math.h>
 
 struct Vector
 {
@@ -38,6 +39,27 @@ Vector operator*(const double a, const Vector b)
     ans.y = a * b.y;
     ans.z = a * b.z;
     return ans;
+}
+
+Vector OuterProduct(const Vector a, const Vector b)
+{
+    Vector ans;
+    ans.x = a.y * b.z - a.z * b.y;
+    ans.y = a.z * b.x - a.x * b.z;
+    ans.z = a.x * b.y - a.y * b.x;
+    return ans;
+}
+
+Vector ProjectionToVector(const Vector a, const Vector b)
+{
+    Vector ans;
+    ans = (a * b) / (b * b) * b;
+    return ans;
+}
+
+double Norm(const Vector a)
+{
+    return sqrt(a * a);
 }
 
 class Missile
@@ -122,6 +144,12 @@ bool Drone::IsInSight(Drone target)
 
 bool Drone::IsInScan(Drone target)
 {
+    Vector relative_position = target.GetPos() - pos_;
+    Vector r, l;
+    l = OuterProduct(lift_, direction_);
+    if(Norm(ProjectionToVector(relative_position, l)) <= lateral_scan_range_ && Norm(ProjectionToVector(relative_position, lift_) <= vertical_scan_range_))
+        return true;
+    return false;
     
 }
 
