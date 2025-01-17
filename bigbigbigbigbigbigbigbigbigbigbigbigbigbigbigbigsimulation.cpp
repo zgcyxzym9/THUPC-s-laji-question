@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
+#include <algorithm>
 
 struct Vector
 {
@@ -114,9 +115,14 @@ public:
         vertical_scan_range_ = vertical_scan_range;
     }
     Drone();
+
+    int GetId();
+    int GetFaction();
     Vector GetPos();
+    bool IsAlive();
     bool IsInSight(Drone target);
     bool IsInScan(Drone target);
+    double GetDist(Drone target);
     void LockTarget(std::vector<Drone> &DroneList); // 选定目标
 
 private:
@@ -131,9 +137,24 @@ private:
     Missile missile_;
 };
 
+int Drone::GetId()
+{
+    return id_;
+}
+
+int Drone::GetFaction()
+{
+    return faction_;
+}
+
 Vector Drone::GetPos()
 {
     return pos_;
+}
+
+bool Drone::IsAlive()
+{
+    return is_alive_;
 }
 
 bool Drone::IsInSight(Drone target)
@@ -144,13 +165,20 @@ bool Drone::IsInSight(Drone target)
 
 bool Drone::IsInScan(Drone target)
 {
+    if (!IsInSight(target))
+        return false;
+
     Vector relative_position = target.GetPos() - pos_;
     Vector l;
     l = OuterProduct(lift_, direction_);
-    if(Norm(ProjectionToVector(relative_position, l)) <= lateral_scan_range_ && Norm(ProjectionToVector(relative_position, lift_)) <= vertical_scan_range_)
+    if (Norm(ProjectionToVector(relative_position, l)) <= lateral_scan_range_ && Norm(ProjectionToVector(relative_position, lift_)) <= vertical_scan_range_)
         return true;
     return false;
-    
+}
+
+double Drone::GetDist(Drone target)
+{
+    return Norm(pos_ - target.GetPos());
 }
 
 void Drone::LockTarget(std::vector<Drone> &DroneList) // 选定目标
@@ -162,15 +190,24 @@ void Drone::LockTarget(std::vector<Drone> &DroneList) // 选定目标
     否则选取取 min{|rx − Lx|, |rx + Lx|} + min{|ry − Hy|, |ry + Hy|} 最小的，相同则取编号最小
 
     在实现时我们把第二步检验放至第一步之前，以减少运算次数
+
+    注意，在这里我们利用 target_ - 1 作为目标在DroneList中的下标，可能会存在鲁棒性问题，
+    但是暂时没有更好的方式（除了暴力搜索和提前储存目标信息，都会造成复杂度增加），并且我们不会改变DroneList，我们也会尽量避开这种行为
     */
 
-    if (IsInSight(DroneList[target_ - 1]))
+    if (target_ && IsInSight(DroneList[target_ - 1]))
         return;
+    else
+        target_ = 0;
 
     int drone_num = DroneList.size();
     bool flag = true;
     for (int i = 0; i < drone_num; i++)
     {
+        if (!DroneList[i].IsAlive())
+            continue;
+        if (DroneList[i].GetFaction() == faction_)
+            continue;
         if (IsInSight(DroneList[i]))
         {
             flag = false;
@@ -183,7 +220,41 @@ void Drone::LockTarget(std::vector<Drone> &DroneList) // 选定目标
         return;
     }
 
+    // 运行到此处时应有 target_ == 0
+    for (int i = 0; i < drone_num; i++)
+    {
+        if (!DroneList[i].IsAlive())
+            continue;
+        if (DroneList[i].GetFaction() == faction_)
+            continue;
+        if (!IsInSight(DroneList[i]))
+            continue;
+        if (IsInScan(DroneList[i]))
+        {
+            if (!target_)
+                target_ = DroneList[i].id_;
+            else if (GetDist(DroneList[i]) < GetDist(DroneList[target_ - 1]))
+                target_ = DroneList[i].id_;
+        }
+    }
+    if (target_)
+        return;
 
+    double tmp = 10000000; // 记录当前min...最小的是多少
+    for (int i = 0; i < drone_num; i++)
+    {
+        if (!DroneList[i].IsAlive())
+            continue;
+        if (DroneList[i].GetFaction() == faction_)
+            continue;
+
+        double rx = Norm(ProjectionToVector(DroneList[i].GetPos() - pos_, OuterProduct(lift_, direction_)));
+        double ry = Norm(ProjectionToVector(DroneList[i].GetPos() - pos_, lift_));
+        if (std::min(abs(rx - lateral_scan_range_), abs(rx + lateral_scan_range_)) + std::min(abs(ry - vertical_scan_range_), abs(ry + vertical_scan_range_)) < tmp)
+            target_ = DroneList[i].GetId();
+    }
+
+    return;
 }
 
 int main()
