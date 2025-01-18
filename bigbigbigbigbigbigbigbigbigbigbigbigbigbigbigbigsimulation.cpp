@@ -50,7 +50,7 @@ bool operator==(const Vector a, const Vector b)
 
 bool operator!=(const Vector a, const Vector b)
 {
-    return !(a==b);
+    return !(a == b);
 }
 
 Vector OuterProduct(const Vector a, const Vector b)
@@ -141,6 +141,7 @@ public:
     double GetDist(Drone target);
     void LockTarget(std::vector<Drone> &DroneList); // 选定目标
     bool IsValidMove(Vector target_pos);
+    void GetDestination(std::vector<Drone> &DroneList);
 
 private:
     int id_;
@@ -150,6 +151,8 @@ private:
     Vector direction_;
     Vector lift_;
     Vector dest_pos_;
+    Vector dest_direction_;
+    Vector dest_lift_;
     double pull_rate_, push_rate_, roll_rate_, max_speed_, lateral_scan_range_, vertical_scan_range_;
     bool is_alive_;
     Missile missile_;
@@ -287,32 +290,129 @@ bool Drone::IsValidMove(Vector target_pos) // 判断目前到target_pos是否是
     计算移动所需时间，较为简单
     */
 
-    if(target_pos == pos_)
+    if (target_pos == pos_)
         return true;
 
     double total_time = 0;
     Vector target_direction = target_pos - pos_;
-    Vector zero_vector = {0,0,0};
-    if(OuterProduct(target_direction, direction_) == zero_vector)
+    Vector zero_vector = {0, 0, 0};
+    if (OuterProduct(target_direction, direction_) == zero_vector)
     {
-        if(target_direction * direction_ < 0)
+        if (target_direction * direction_ < 0)
             return false;
     }
-    else    //计算改变航向所需时间
+    else // 计算改变航向所需时间
     {
         Vector orthogonal_dir = OuterProduct(target_direction, direction_);
         double roll_angle = GetAngle(OuterProduct(lift_, direction_), orthogonal_dir);
         roll_angle = std::min(roll_angle, PI - roll_angle);
         total_time += roll_angle / roll_rate_;
 
-        if(orthogonal_dir * OuterProduct(lift_, direction_) >= 0)
+        if (orthogonal_dir * OuterProduct(lift_, direction_) >= 0)
             total_time += GetAngle(target_direction, direction_) / pull_rate_;
         else
             total_time += GetAngle(target_direction, direction_) / push_rate_;
     }
-    
+
     total_time += Norm(target_pos - pos_) / max_speed_;
     return total_time <= 1;
+}
+
+void Drone::GetDestination(std::vector<Drone> &DroneList)
+{
+    if (target_ == 0)
+    {
+        dest_pos_ = pos_;
+        dest_direction_ = lift_;
+        dest_lift_ = {-pos_.x, -pos_.y, -pos_.z};
+        return;
+    }
+
+    Drone cur_best = *this;
+    for (int i = -int(max_speed_); i <= int(max_speed_); i++)
+        for (int j = -int(max_speed_); j <= int(max_speed_); j++)
+            for (int k = -int(max_speed_); k <= int(max_speed_); k++)
+            {
+                Vector dest = {pos_.x + i, pos_.y + j, pos_.z + k};
+                if (IsValidMove(dest))
+                {
+                    Drone dest_drone = *this;
+                    dest_drone.pos_ = {pos_.x + i, pos_.y + j, pos_.z + k};
+                    dest_drone.direction_ = dest - pos_;
+                    /*
+                    计算升力线方向：升力线与左手向和前向垂直，且左手向一定和前向垂直，所以可以用叉乘算出升力线方向；
+                    如果该升力线方向和先前的升力线方向成钝角，那么将其反向。左手向即原方向和现方向的外积，但这里我们并不考虑其正反。
+                    需要特判方向不变。
+                    */
+                    if (GetAngle(dest_drone.direction_, direction_) == 0)
+                        dest_drone.lift_ = lift_;
+                    else
+                    {
+                        Vector left = OuterProduct(dest_drone.direction_, direction_);
+                        dest_drone.lift_ = OuterProduct(left, dest_drone.direction_);
+                        if (dest_drone.lift_ * lift_ < 0)
+                            dest_drone.lift_ = {-dest_drone.lift_.x, -dest_drone.lift_.y, -dest_drone.lift_.z};
+                    }
+
+                    if (dest_drone.IsInSight(DroneList[target_ - 1])) // 1.1
+                    {
+                        if (Norm(DroneList[target_ - 1].pos_ - dest_drone.pos_) < Norm(DroneList[target_ - 1].pos_ - cur_best.pos_))
+                        {
+                            cur_best.pos_ = dest;
+                            cur_best.direction_ = dest_drone.direction_;
+                            cur_best.lift_ = dest_drone.lift_;
+                        }
+                        else if (Norm(DroneList[target_ - 1].pos_ - dest_drone.pos_) == Norm(DroneList[target_ - 1].pos_ - cur_best.pos_)) // 若有多个这样的位置
+                        {
+                            double rx = Norm(ProjectionToVector(DroneList[target_ - 1].GetPos() - dest_drone.pos_, OuterProduct(dest_drone.lift_, dest_drone.direction_)));
+                            double ry = Norm(ProjectionToVector(DroneList[target_ - 1].GetPos() - dest_drone.pos_, dest_drone.lift_));
+                            double brx = Norm(ProjectionToVector(DroneList[target_ - 1].GetPos() - cur_best.pos_, OuterProduct(cur_best.lift_, cur_best.direction_)));
+                            double bry = Norm(ProjectionToVector(DroneList[target_ - 1].GetPos() - cur_best.pos_, cur_best.lift_));
+                            if (dest_drone.IsInScan(DroneList[target_ - 1]))
+                            {
+                                if (!cur_best.IsInScan(DroneList[target_ - 1])) // 1.1.1
+                                {
+                                    cur_best.pos_ = dest;
+                                    cur_best.direction_ = dest_drone.direction_;
+                                    cur_best.lift_ = dest_drone.lift_;
+                                }
+                                else // 1.1.1.1
+                                {
+                                    if (sqrt(pow(rx, 2) + pow(ry, 2)) < sqrt(pow(brx, 2) + pow(bry, 2)))
+                                    {
+                                        cur_best.pos_ = dest;
+                                        cur_best.direction_ = dest_drone.direction_;
+                                        cur_best.lift_ = dest_drone.lift_;
+                                    }
+                                }
+                            }
+                            else if (!cur_best.IsInScan(DroneList[target_ - 1]))
+                            {
+                                if (std::min(abs(rx - lateral_scan_range_), abs(rx + lateral_scan_range_)) + std::min(abs(ry - vertical_scan_range_), abs(ry + vertical_scan_range_)) < std::min(abs(brx - lateral_scan_range_), abs(brx + lateral_scan_range_)) + std::min(abs(bry - vertical_scan_range_), abs(bry + vertical_scan_range_)))
+                                {
+                                    cur_best.pos_ = dest;
+                                    cur_best.direction_ = dest_drone.direction_;
+                                    cur_best.lift_ = dest_drone.lift_;
+                                }
+                            }
+                        }
+                    }
+                    else // 1.2
+                    {
+                        if (!cur_best.IsInSight(DroneList[target_ - 1]) && Norm(dest - pos_ - max_speed_ * direction_) < Norm(cur_best.pos_ - pos_ - max_speed_ * direction_)) // 不确定：Vm*d中的d是之前还是之后？此处认为是之前
+                        {
+                            cur_best.pos_ = dest;
+                            cur_best.direction_ = dest_drone.direction_;
+                            cur_best.lift_ = dest_drone.lift_;
+                        }
+                    }
+                } // IsValidMove
+            }
+
+    dest_pos_ = cur_best.pos_;
+    dest_direction_ = cur_best.direction_;
+    dest_lift_ = cur_best.lift_;
+    return;
 }
 
 int main()
