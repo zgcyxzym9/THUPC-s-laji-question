@@ -43,6 +43,11 @@ Vector operator*(const double a, const Vector b)
     return ans;
 }
 
+Vector operator/(const Vector a, const double b)
+{
+    return {a.x/b, a.y/b, a.z/b};
+}
+
 bool operator==(const Vector a, const Vector b)
 {
     return (a.x == b.x) && (a.y == b.y) && (a.z == b.z);
@@ -107,6 +112,7 @@ private:
     double yaw_rate_, max_speed_, safe_dist_, explode_dist_, max_lock_angle_, nav_time_;
     bool is_launched_;
     bool is_active_;
+    friend class Drone;
 };
 
 class Drone
@@ -142,6 +148,8 @@ public:
     void LockTarget(std::vector<Drone> &DroneList); // 选定目标
     bool IsValidMove(Vector target_pos);
     void GetDestination(std::vector<Drone> &DroneList);
+    void FireMissile(Vector target_pos);
+    void CheckFireMissile(std::vector<Drone> &DroneList);
 
 private:
     int id_;
@@ -412,6 +420,22 @@ void Drone::GetDestination(std::vector<Drone> &DroneList)
     dest_pos_ = cur_best.pos_;
     dest_direction_ = cur_best.direction_;
     dest_lift_ = cur_best.lift_;
+    return;
+}
+
+void Drone::FireMissile(Vector target_pos)
+{
+    missile_.is_launched_ = true;
+    missile_.is_active_ = false;
+    missile_.pos_ = pos_;
+    missile_.direction_ = (target_pos - pos_) / Norm(target_pos - pos_);
+    missile_.target_ = target_;
+}
+
+void Drone::CheckFireMissile(std::vector<Drone> &DroneList)
+{
+    if(!missile_.is_launched_ && IsInScan(DroneList[target_ - 1]))
+        FireMissile(DroneList[target_ - 1].pos_);
     return;
 }
 
