@@ -2,6 +2,7 @@
 #include <vector>
 #include <math.h>
 #include <algorithm>
+#define PI 3.141592653589793
 
 struct Vector
 {
@@ -42,6 +43,16 @@ Vector operator*(const double a, const Vector b)
     return ans;
 }
 
+bool operator==(const Vector a, const Vector b)
+{
+    return (a.x == b.x) && (a.y == b.y) && (a.z == b.z);
+}
+
+bool operator!=(const Vector a, const Vector b)
+{
+    return !(a==b);
+}
+
 Vector OuterProduct(const Vector a, const Vector b)
 {
     Vector ans;
@@ -61,6 +72,11 @@ Vector ProjectionToVector(const Vector a, const Vector b)
 double Norm(const Vector a)
 {
     return sqrt(a * a);
+}
+
+double GetAngle(const Vector a, const Vector b)
+{
+    return acos((a * b) / (Norm(a) * Norm(b)));
 }
 
 class Missile
@@ -124,6 +140,7 @@ public:
     bool IsInScan(Drone target);
     double GetDist(Drone target);
     void LockTarget(std::vector<Drone> &DroneList); // 选定目标
+    bool IsValidMove(Vector target_pos);
 
 private:
     int id_;
@@ -132,6 +149,7 @@ private:
     Vector pos_;
     Vector direction_;
     Vector lift_;
+    Vector dest_pos_;
     double pull_rate_, push_rate_, roll_rate_, max_speed_, lateral_scan_range_, vertical_scan_range_;
     bool is_alive_;
     Missile missile_;
@@ -255,6 +273,46 @@ void Drone::LockTarget(std::vector<Drone> &DroneList) // 选定目标
     }
 
     return;
+}
+
+bool Drone::IsValidMove(Vector target_pos) // 判断目前到target_pos是否是合法运动
+{
+    /*
+    注意：滚转率，俯仰率均不超过π/2
+    如果目标方向和当前方向共线：特判同向/反向
+    否则计算左手向和平面法线的夹角，选择更近的方向滚转；
+
+    计算俯仰所需时间，升力线不可能旋转超过π/2，因此目标/当前方向叉乘位于左侧则拉杆，否则推杆
+
+    计算移动所需时间，较为简单
+    */
+
+    if(target_pos == pos_)
+        return true;
+
+    double total_time = 0;
+    Vector target_direction = target_pos - pos_;
+    Vector zero_vector = {0,0,0};
+    if(OuterProduct(target_direction, direction_) == zero_vector)
+    {
+        if(target_direction * direction_ < 0)
+            return false;
+    }
+    else    //计算改变航向所需时间
+    {
+        Vector orthogonal_dir = OuterProduct(target_direction, direction_);
+        double roll_angle = GetAngle(OuterProduct(lift_, direction_), orthogonal_dir);
+        roll_angle = std::min(roll_angle, PI - roll_angle);
+        total_time += roll_angle / roll_rate_;
+
+        if(orthogonal_dir * OuterProduct(lift_, direction_) >= 0)
+            total_time += GetAngle(target_direction, direction_) / pull_rate_;
+        else
+            total_time += GetAngle(target_direction, direction_) / push_rate_;
+    }
+    
+    total_time += Norm(target_pos - pos_) / max_speed_;
+    return total_time <= 1;
 }
 
 int main()
