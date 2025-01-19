@@ -84,6 +84,8 @@ double GetAngle(const Vector a, const Vector b)
     return acos((a * b) / (Norm(a) * Norm(b)));
 }
 
+class Drone;
+
 class Missile
 {
 public:
@@ -102,6 +104,10 @@ public:
         nav_time_ = nav_time;
     }
     Missile();
+    bool DestIsInScan(Drone target);
+    bool IsValidMove(Vector target_pos);
+    void MoveMissile(Vector dest, std::vector<Drone> &DroneList);
+    void GetDestination(std::vector<Drone> &DroneList);
 
 private:
     int id_;
@@ -112,6 +118,7 @@ private:
     double yaw_rate_, max_speed_, safe_dist_, explode_dist_, max_lock_angle_, nav_time_;
     bool is_launched_;
     bool is_active_;
+    bool is_locked_;
     friend class Drone;
 };
 
@@ -141,6 +148,7 @@ public:
     int GetId();
     int GetFaction();
     Vector GetPos();
+    Vector GetDestPos();
     bool IsAlive();
     bool IsInSight(Drone target);
     bool IsInScan(Drone target);
@@ -179,6 +187,11 @@ int Drone::GetFaction()
 Vector Drone::GetPos()
 {
     return pos_;
+}
+
+Vector Drone::GetDestPos()
+{
+    return dest_pos_;
 }
 
 bool Drone::IsAlive()
@@ -430,12 +443,104 @@ void Drone::FireMissile(Vector target_pos)
     missile_.pos_ = pos_;
     missile_.direction_ = (target_pos - pos_) / Norm(target_pos - pos_);
     missile_.target_ = target_;
+    missile_.is_locked_ = true;
 }
 
 void Drone::CheckFireMissile(std::vector<Drone> &DroneList)
 {
     if(!missile_.is_launched_ && IsInScan(DroneList[target_ - 1]))
         FireMissile(DroneList[target_ - 1].pos_);
+    return;
+}
+
+bool Missile::DestIsInScan(Drone target)
+{
+    Vector target_dest = target.GetDestPos();
+    return direction_ * (target_dest - pos_) > 0 && GetAngle(direction_, target_dest - pos_) <= max_lock_angle_;
+}
+
+bool Missile::IsValidMove(Vector target_pos)
+{
+    if(target_pos == pos_)
+        return true;
+    
+    Vector target_direction = target_pos - pos_;
+    double total_time = GetAngle(target_direction, direction_) / yaw_rate_ + Norm(target_pos - pos_) / max_speed_;
+    return total_time <= 1;
+}
+
+void Missile::MoveMissile(Vector dest, std::vector<Drone> &DroneList)
+{
+
+}
+
+void Missile::GetDestination(std::vector<Drone> &DroneList)
+{
+    Missile cur_best = *this;
+    if(is_locked_)
+    {
+        Vector target_dest = DroneList[target_ - 1].GetDestPos();
+        if(IsValidMove(target_dest))
+        {
+            MoveMissile(target_dest, DroneList);
+            return;
+        }
+        else
+        {
+            for(int i = -int(max_speed_); i <= int(max_speed_); i++)
+                for(int j = -int(max_speed_); j <= int(max_speed_); j++)
+                    for(int k = -int(max_speed_); k <= int(max_speed_); k++)
+                    {
+                        Vector dest = {pos_.x + i, pos_.y + j, pos_.z + k};
+                        Missile dest_missile = *this;
+                        dest_missile.pos_ = dest;
+                        dest_missile.direction_ = dest - pos_;
+
+                        if(dest_missile.DestIsInScan(DroneList[target_ - 1]))   //否则导弹会移到能使敌机位移后的位置处于锁定范围内的位置
+                        {
+                            if(!cur_best.DestIsInScan(DroneList[target_ - 1]))
+                            {
+                                cur_best.pos_ = dest;
+                                cur_best.direction_ = dest - pos_;
+                            }
+                            else if(Norm(dest - target_dest) < Norm(cur_best.pos_ - target_dest))   //|q-q'|最小
+                            {
+                                cur_best.pos_ = dest;
+                                cur_best.direction_ = dest - pos_;
+                            }
+                            else if(Norm(dest - target_dest) == Norm(cur_best.pos_ - target_dest))
+                            {
+                                if(GetAngle(dest_missile.direction_, target_dest - dest) < GetAngle(cur_best.direction_, target_dest - cur_best.pos_))  //锁定角最小
+                                {
+                                    cur_best.pos_ = dest;
+                                    cur_best.direction_ = dest - pos_;
+                                }
+                            }
+                        }
+                        else if(!cur_best.DestIsInScan(DroneList[target_ - 1]) && Norm(dest - pos_ - max_speed_ * direction_) < Norm(cur_best.pos_ - pos_ - max_speed_ * direction_))   //若不存在这样的位置
+                        {
+                            cur_best.pos_ = dest;
+                            cur_best.direction_ = dest - pos_;
+                        }
+                    }
+        }
+    }
+    else    //若导弹脱锁
+    {
+        for(int i = -int(max_speed_); i <= int(max_speed_); i++)
+            for(int j = -int(max_speed_); j <= int(max_speed_); j++)
+                for(int k = -int(max_speed_); k <= int(max_speed_); k++)
+                {
+                    Vector dest = {pos_.x + i, pos_.y + j, pos_.z + k};
+                    if(Norm(dest - pos_ - max_speed_ * direction_) < Norm(cur_best.pos_ - pos_ - max_speed_ * direction_))
+                    {
+                        cur_best.pos_ = dest;
+                        cur_best.direction_ = dest - pos_;
+                    }
+                }
+    }
+
+    MoveMissile(cur_best.pos_, DroneList);
     return;
 }
 
