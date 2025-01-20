@@ -101,6 +101,15 @@ struct Event
     int method_;
 };
 
+bool SortEvent(Event a, Event b)
+{
+    if(a.method_ != b.method_)
+        return a.method_ < b.method_;
+    if(a.destroyed_ != b.destroyed_)
+        return a.destroyed_ < b.destroyed_;
+    return a.destroyer_ < b.destroyer_;
+}
+
 class Drone;
 
 class Missile
@@ -177,6 +186,7 @@ public:
     void GetDestination(std::vector<Drone> &DroneList);
     void FireMissile(Vector target_pos);
     void CheckFireMissile(std::vector<Drone> &DroneList);
+    void Destroyed();
 
 private:
     int id_;
@@ -609,6 +619,18 @@ void Missile::GetDestination(std::vector<Drone> &DroneList, std::vector<Event> &
 
     MoveMissile(cur_best.pos_, DroneList, EventLog);
     return;
+}
+
+void ProcessEvent(std::vector<Drone> &DroneList, std::vector<Event> &EventLog)
+{
+    for(int i = 0; i < EventLog.size(); i++)
+        DroneList[EventLog[i].destroyed_ - 1].Destroyed();
+    return;
+}
+
+void Drone::Destroyed()
+{
+    is_alive_ = false;
 }
 
 int main()
