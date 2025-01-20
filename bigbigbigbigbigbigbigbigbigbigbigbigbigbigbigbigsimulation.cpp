@@ -84,11 +84,11 @@ double GetAngle(const Vector a, const Vector b)
     return acos((a * b) / (Norm(a) * Norm(b)));
 }
 
-bool GetDistToSegment(const Vector endpoint_a, const Vector endpoint_b, const Vector dot)
+double GetDistToSegment(const Vector endpoint_a, const Vector endpoint_b, const Vector dot)
 {
-    Vector tmp_segment = endpoint_a - dot;
+    Vector tmp_segment = dot - endpoint_a;
     Vector foot = dot + tmp_segment - ProjectionToVector(tmp_segment, endpoint_b - endpoint_a);
-    if ((endpoint_a - foot) * (endpoint_b - foot) < 0)
+    if ((endpoint_a - foot) * (endpoint_b - foot) > 0)
         return std::min(Norm(dot - endpoint_a), Norm(dot - endpoint_b));
     else
         return Norm(foot - dot);
@@ -103,9 +103,9 @@ struct Event
 
 bool SortEvent(Event a, Event b)
 {
-    if(a.method_ != b.method_)
+    if (a.method_ != b.method_)
         return a.method_ < b.method_;
-    if(a.destroyed_ != b.destroyed_)
+    if (a.destroyed_ != b.destroyed_)
         return a.destroyed_ < b.destroyed_;
     return a.destroyer_ < b.destroyer_;
 }
@@ -534,26 +534,13 @@ void Missile::MoveMissile(Vector dest, std::vector<Drone> &DroneList, std::vecto
     摧毁无人机方式：在eventlist里面添加，结束后统一摧毁
     */
 
-    if(is_active_)
+    if (is_active_)
     {
-        for(int i = 0; i < DroneList.size(); i++)
+        for (int i = 0; i < DroneList.size(); i++)
         {
-            if(!DroneList[i].IsAlive())
+            if (!DroneList[i].IsAlive())
                 continue;
-            if(GetDistToSegment(pos_, dest, DroneList[i].GetPos()) < explode_dist_)
-            {
-                is_detonated_ = true;
-                EventLog.push_back({DroneList[i].GetId(), id_, 1});
-            }
-        }
-    }
-    else
-    {
-        for(int i = 0; i < DroneList.size(); i++)
-        {
-            if(!DroneList[i].IsAlive())
-                continue;
-            if(pos_ == DroneList[i].GetPos())
+            if (GetDistToSegment(pos_, dest, DroneList[i].GetPos()) < explode_dist_)
             {
                 is_detonated_ = true;
                 EventLog.push_back({DroneList[i].GetId(), id_, 1});
@@ -563,6 +550,21 @@ void Missile::MoveMissile(Vector dest, std::vector<Drone> &DroneList, std::vecto
 
     direction_ = dest - pos_;
     pos_ = dest;
+
+    if (!is_active_)
+    {
+        for (int i = 0; i < DroneList.size(); i++)  //collision check
+        {
+            if (!DroneList[i].IsAlive())
+                continue;
+            if (pos_ == DroneList[i].GetPos())
+            {
+                is_detonated_ = true;
+                EventLog.push_back({DroneList[i].GetId(), id_, 1});
+            }
+        }
+    }
+
     return;
 }
 
@@ -638,10 +640,10 @@ void Missile::GetDestination(std::vector<Drone> &DroneList, std::vector<Event> &
 
 void ProcessEvent(std::vector<Drone> &DroneList, std::vector<Event> &EventLog)
 {
-    for(int i = 0; i < EventLog.size(); i++)
+    for (int i = 0; i < EventLog.size(); i++)
     {
         DroneList[EventLog[i].destroyed_ - 1].Destroyed();
-        if(EventLog[i].method_ == 1 || EventLog[i].method_ == 2)
+        if (EventLog[i].method_ == 1 || EventLog[i].method_ == 2)
             DroneList[EventLog[i].destroyer_ - 1].ClearMissile();
     }
     return;
@@ -659,15 +661,15 @@ void Drone::ClearMissile()
 
 void Drone::MoveDrone(std::vector<Drone> &DroneList, std::vector<Event> &EventLog)
 {
-    for(int i = 0; i < DroneList.size(); i++)
+    for (int i = 0; i < DroneList.size(); i++)
     {
-        if(DroneList[i].missile_.is_active_ == false || DroneList[i].missile_.is_launched_ == false)
+        if (DroneList[i].missile_.is_active_ == false || DroneList[i].missile_.is_launched_ == false)
         {
-            if(dest_pos_ == DroneList[i].missile_.pos_)
+            if (dest_pos_ == DroneList[i].missile_.pos_)
                 EventLog.push_back({id_, DroneList[i].GetId(), 2});
             continue;
         }
-        if(GetDistToSegment(pos_, dest_pos_, DroneList[i].missile_.pos_) < DroneList[i].missile_.explode_dist_)
+        if (GetDistToSegment(pos_, dest_pos_, DroneList[i].missile_.pos_) < DroneList[i].missile_.explode_dist_)
             EventLog.push_back({id_, DroneList[i].GetId(), 2});
     }
     pos_ = dest_pos_;
@@ -683,18 +685,18 @@ void Drone::MoveMissile(std::vector<Drone> &DroneList, std::vector<Event> &Event
 
 void CheckCollision(std::vector<Drone> &DroneList, std::vector<Event> &EventLog)
 {
-    for(int i = 0; i < DroneList.size(); i++)
+    for (int i = 0; i < DroneList.size(); i++)
     {
-        if(!DroneList[i].IsAlive())
+        if (!DroneList[i].IsAlive())
             continue;
 
-        for(int j = 0; j < DroneList.size(); j++)
+        for (int j = 0; j < DroneList.size(); j++)
         {
-            if(i == j)
+            if (i == j)
                 continue;
-            if(DroneList[i].GetPos() == DroneList[j].GetPos())
+            if (DroneList[i].GetPos() == DroneList[j].GetPos())
             {
-                EventLog.push_back({i, j, 3});
+                EventLog.push_back({DroneList[i].GetId(), DroneList[j].GetId(), 3});
                 DroneList[i].Destroyed();
                 DroneList[j].Destroyed();
             }
@@ -705,40 +707,44 @@ void CheckCollision(std::vector<Drone> &DroneList, std::vector<Event> &EventLog)
 
 void Drone::UpdateMissileLock(std::vector<Drone> &DroneList)
 {
-    if(!missile_.is_launched_)
+    if (!missile_.is_launched_)
         return;
-    if(!DroneList[target_ - 1].IsAlive() || !missile_.IsInScan(DroneList[target_ - 1]))
+    if (!DroneList[target_ - 1].IsAlive() || !missile_.IsInScan(DroneList[target_ - 1]))
         missile_.is_locked_ = false;
     return;
 }
 
 void Drone::ValidateMissile(std::vector<Drone> &DroneList)
 {
-    if(!missile_.is_launched_)
+    if (!missile_.is_launched_)
         return;
-    
-    if(missile_.time_elapsed_ == missile_.nav_time_)
+
+    if (missile_.time_elapsed_ == missile_.nav_time_)
     {
         missile_.ClearMissile();
         return;
     }
 
-    if(!missile_.is_locked_ && missile_.is_active_)
+    if (!missile_.is_locked_ && missile_.is_active_)
     {
         missile_.ClearMissile();
         return;
     }
+
+    missile_.time_elapsed_++;
 }
 
 void Drone::ActiveMissile()
 {
-    if(!is_alive_ || Norm(missile_.pos_ - pos_) > missile_.safe_dist_)
+    if (!is_alive_ || Norm(missile_.pos_ - pos_) > missile_.safe_dist_)
         missile_.is_active_ = true;
     return;
 }
 
 int main()
 {
+    //freopen("bigsimulation.in", "rb", stdin);
+    //freopen("bigsimulation.out", "wb", stdout);
     int n, T;
     std::cin >> n >> T;
     std::vector<Drone> DroneList;
@@ -752,102 +758,108 @@ int main()
         double myr, mms, msd, med, mmla, mnt;
         std::cin >> myr >> mms >> msd >> med >> mmla >> mnt;
         DroneList.push_back(Drone(i, int((i - 1) / n), pos, dir, lift, pullr, pushr, rr, ms, lsr, vsr, myr, mms, msd, med, mmla, mnt));
-
-        for(int i = 1; i <= T; i++)
-        {
-            for(int j = 0; j < 2 * n; j++)  //subtask 1
-            {
-                if(DroneList[j].IsAlive())
-                {
-                    DroneList[j].LockTarget(DroneList);
-                    DroneList[j].GetDestination(DroneList);
-                }
-            }
-
-            for(int j = 0; j < 2 * n; j++)  //subtask 2
-            {
-                if(DroneList[j].IsAlive())
-                    DroneList[j].CheckFireMissile(DroneList);
-            }
-
-            for(int j = 0; j < 2 * n; j++)  //subtask 3
-            {
-                DroneList[j].MoveMissile(DroneList, EventLog);
-            }
-
-            ProcessEvent(DroneList, EventLog);  //subtask 4
-
-            for(int j = 0; j < 2 * n; j++)  //subtask 5
-            {
-                if(DroneList[j].IsAlive())
-                    DroneList[j].MoveDrone(DroneList, EventLog);
-            }
-            for(int j = 0; j < 2 * n; j++)
-            {
-                DroneList[j].UpdateMissileLock(DroneList);
-            }
-
-            ProcessEvent(DroneList, EventLog);  //subtask 6
-
-            CheckCollision(DroneList, EventLog);   //subtask 7
-
-            for(int j = 0; j < 2 * n; j++)  //subtask 8
-            {
-                DroneList[j].ValidateMissile(DroneList);
-            }
-
-            for(int j = 0; j < 2 * n; j++)  //subtask 9
-            {
-                DroneList[j].ActiveMissile();
-            }
-
-
-            //output
-            std::sort(EventLog.begin(), EventLog.end(), SortEvent);
-            int cnt1 = 0, cnt2 = 0, cnt3 = 0;
-            for(int i = 0; i < EventLog.size(); i++)
-            {
-                if(EventLog[i].method_ == 1)
-                    cnt1++;
-                else if(EventLog[i].method_ == 2)
-                    cnt2++;
-                else if(EventLog[i].method_ == 3)
-                    cnt3++;
-            }
-            std::cout<<cnt1<<" "<<cnt2<<""<<cnt3;
-
-            int idx = 0;
-            int tmp_id = 2 * n + 1;
-            std::vector<int> tmp_list;
-            tmp_list.empty();
-            while(idx < EventLog.size())
-            {
-                
-                if(EventLog[idx].destroyed_ != tmp_id)
-                {
-                    if(!tmp_list.empty())
-                    {
-                        std::cout<<tmp_id<<" "<<tmp_list.size()<<" ";
-                        for(int i = 0; i < tmp_list.size(); i++)
-                            std::cout<<tmp_list[i]<<" ";
-                        std::cout<<std::endl;
-                    }
-                    tmp_id = EventLog[idx].destroyed_;
-                    tmp_list.clear();
-                }
-
-                tmp_list.push_back(EventLog[idx].destroyer_);
-            }
-            EventLog.clear();
-        }
     }
 
-    /*
-    输出格式：
-    第一行：导弹位移时被摧毁的无人机的数量，无人机位移时被摧毁的数量，位置相同而坠毁的无人机数量
-    前p1行：被摧毁的无人机编号，被几枚导弹摧毁，编号
+    for (int i = 1; i <= T; i++)
+    {
+        for (int j = 0; j < 2 * n; j++) // subtask 1
+        {
+            if (DroneList[j].IsAlive())
+            {
+                DroneList[j].LockTarget(DroneList);
+                DroneList[j].GetDestination(DroneList);
+            }
+        }
 
-    */
+        for (int j = 0; j < 2 * n; j++) // subtask 2
+        {
+            if (DroneList[j].IsAlive())
+                DroneList[j].CheckFireMissile(DroneList);
+        }
 
+        for (int j = 0; j < 2 * n; j++) // subtask 3
+        {
+            DroneList[j].MoveMissile(DroneList, EventLog);
+        }
+
+        ProcessEvent(DroneList, EventLog); // subtask 4
+
+        for (int j = 0; j < 2 * n; j++) // subtask 5
+        {
+            if (DroneList[j].IsAlive())
+                DroneList[j].MoveDrone(DroneList, EventLog);
+        }
+        for (int j = 0; j < 2 * n; j++)
+        {
+            DroneList[j].UpdateMissileLock(DroneList);
+        }
+
+        ProcessEvent(DroneList, EventLog); // subtask 6
+
+        CheckCollision(DroneList, EventLog); // subtask 7
+
+        for (int j = 0; j < 2 * n; j++) // subtask 8
+        {
+            DroneList[j].ValidateMissile(DroneList);
+        }
+
+        for (int j = 0; j < 2 * n; j++) // subtask 9
+        {
+            DroneList[j].ActiveMissile();
+        }
+
+        // output
+        std::sort(EventLog.begin(), EventLog.end(), SortEvent);
+        int cnt1 = 0, cnt2 = 0, cnt3 = 0;
+        for (int i = 0; i < EventLog.size(); i++)
+        {
+            if (EventLog[i].method_ == 1 && (i == 0 || EventLog[i].destroyed_ != EventLog[i-1].destroyed_))
+                cnt1++;
+            else if (EventLog[i].method_ == 2 && (i == 0 || EventLog[i].destroyed_ != EventLog[i-1].destroyed_))
+                cnt2++;
+            else if (EventLog[i].method_ == 3 && (i == 0 || EventLog[i].destroyed_ != EventLog[i-1].destroyed_))
+                cnt3++;
+        }
+        std::cout << cnt1 << " " << cnt2 << " " << cnt3 << std::endl;
+
+        int idx = 0;
+        int tmp_id = 2 * n + 1;
+        std::vector<int> tmp_list;
+        tmp_list.empty();
+        while (idx < EventLog.size())
+        {
+
+            if (EventLog[idx].destroyed_ != tmp_id)
+            {
+                if (!tmp_list.empty())
+                {
+                    if(EventLog[idx - 1].method_ == 3)
+                        std::cout << tmp_list.size() + 1 << " " << tmp_id << " ";
+                    else
+                        std::cout << tmp_id << " " << tmp_list.size() << " ";
+                    for (int i = 0; i < tmp_list.size(); i++)
+                        std::cout << tmp_list[i] << " ";
+                    std::cout << std::endl;
+                }
+                tmp_id = EventLog[idx].destroyed_;
+                tmp_list.clear();
+            }
+
+            tmp_list.push_back(EventLog[idx].destroyer_);
+            idx++;
+        }
+        if (!tmp_list.empty())
+        {
+            if(EventLog[idx - 1].method_ == 3)
+                std::cout << tmp_list.size() + 1 << " " << tmp_id << " ";
+            else
+                std::cout << tmp_id << " " << tmp_list.size() << " ";
+            for (int i = 0; i < tmp_list.size(); i++)
+                std::cout << tmp_list[i] << " ";
+            std::cout << std::endl;
+        }
+        EventLog.clear();
+    }
+    
     return 0;
 }
